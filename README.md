@@ -1,3 +1,15 @@
+# FAST-Calib ROS2 版本
+
+在 [engine1wu](https://github.com/hku-mars/FAST-Calib/issues/35) 的基础上将 ROS1 的 FAST-Calib 项目转换成了 ROS2。仅在 ubuntu 22.04 humble 上进行了测试。
+## 运行说明
+### 参数配置
+在`calib_data/mid360_11`中提供了测试数据，是将[sample data](https://connecthkuhk-my.sharepoint.com/:f:/g/personal/zhengcr_connect_hku_hk/Eq_k_4Mf_11Eggg4a5lbRzgBHwd0EivtCJd2ExtcNlu1FA?e=vjm4gH)中的`mid360/11`点云裁剪后转成了ros2格式。只需要修改 `config/qr_params.yaml` 文件中的路径相关的参数就可以跑这组测试数据了，其中`bag_path`是*ros2 bag PointCloud2*的文件夹。
+### 启动节点
+```bash
+ros2 launch fast_calib calib.launch.py
+```
+
+
 # FAST-Calib
 FAST-Calib is an automatic target-based extrinsic calibration tool for LiDAR-camera systems (eg., [FAST-LIVO2](https://github.com/hku-mars/FAST-LIVO2)). 
 
