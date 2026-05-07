@@ -14,6 +14,7 @@ find_package(rosbag2_cpp REQUIRED)
 
 find_package(PCL 1.10 REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Include directories
 include_directories(
@@ -46,9 +47,21 @@ target_link_libraries(fast_calib
   ${OpenCV_LIBRARIES}
 )
 
+# Multi-scene calibration executable
+add_executable(multi_fast_calib src/multi_scene.cpp)
+
+ament_target_dependencies(multi_fast_calib
+  rclcpp
+)
+
+target_link_libraries(multi_fast_calib
+  Eigen3::Eigen
+)
+
 # Install
 install(TARGETS
   fast_calib
+  multi_fast_calib
   DESTINATION lib/${PROJECT_NAME}
 )
 

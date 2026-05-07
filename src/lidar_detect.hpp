@@ -211,7 +211,7 @@ public:
             seg.setModelType(pcl::SACMODEL_CIRCLE2D);
             seg.setMethodType(pcl::SAC_RANSAC);
             seg.setDistanceThreshold(0.01); // 设置距离阈值
-            seg.setMaxIterations(1000);     // 设置最大迭代次数
+            seg.setMaxIterations(10000);     // 设置最大迭代次数
             seg.setInputCloud(cluster);
             seg.segment(*inliers, *coefficients);
 

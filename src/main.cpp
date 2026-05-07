@@ -49,6 +49,9 @@ int main(int argc, char **argv)
   sortPatternCenters(qr_center_cloud, qr_centers, "camera");
   sortPatternCenters(lidar_center_cloud, lidar_centers, "lidar");
 
+  // 保存中间结果：排序后的 LiDAR 圆心和 QR 圆心 (for multi-scene calibration)
+  saveTargetHoleCenters(lidar_centers, qr_centers, params);
+
   // 计算外参
   Eigen::Matrix4f transformation;
   pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ> svd;

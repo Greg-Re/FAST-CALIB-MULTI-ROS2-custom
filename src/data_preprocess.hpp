@@ -38,7 +38,7 @@ public:
         string output_path = params.output_path;
 
         // Load image
-        img_input_ = cv::imread(params.image_path, cv::IMREAD_UNCHANGED);
+        img_input_ = cv::imread(params.image_path, cv::IMREAD_COLOR);
         if (img_input_.empty())
         {
             std::string msg = "Loading the image " + image_path + " failed";

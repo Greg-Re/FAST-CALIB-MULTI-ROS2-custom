@@ -485,4 +485,41 @@ void save2PLY(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::string &file
     pcl::io::savePLYFile(filename, *cloud);
   }
 }
+
+void saveTargetHoleCenters(const pcl::PointCloud<pcl::PointXYZ>::Ptr& lidar_centers,
+                      const pcl::PointCloud<pcl::PointXYZ>::Ptr& qr_centers,
+                      const Params& params)
+{
+    if (lidar_centers->size() != 4 || qr_centers->size() != 4) {
+      std::cerr << "[saveTargetHoleCenters] The number of points in lidar_centers or qr_centers is not 4, skip saving." << std::endl;
+      return;
+    }
+
+    std::string saveDir = params.output_path;
+    if (saveDir.back() != '/') saveDir += '/';
+    std::ofstream saveFile(saveDir + "circle_center_record.txt", std::ios::app);
+
+    if (!saveFile.is_open()) {
+        std::cerr << "[saveTargetHoleCenters] Cannot open file: " << saveDir + "circle_center_record.txt" << std::endl;
+        return;
+    }
+
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    saveFile << "time: " << std::put_time(std::localtime(&now_time), "%Y-%m-%d %H:%M:%S") << std::endl;
+
+    saveFile << "lidar_centers:";
+    for (const auto& pt : lidar_centers->points) {
+        saveFile << " {" << pt.x << "," << pt.y << "," << pt.z << "}";
+    }
+    saveFile << std::endl;
+    saveFile << "qr_centers:";
+    for (const auto& pt : qr_centers->points) {
+        saveFile << " {" << pt.x << "," << pt.y << "," << pt.z << "}";
+    }
+    saveFile << std::endl;
+    saveFile.close();
+    std::cout << BOLDGREEN << "[Record] Saved four pairs of circular hole centers to " << BOLDWHITE << saveDir << "circle_center_record.txt" << RESET << std::endl;
+}
+
 #endif
