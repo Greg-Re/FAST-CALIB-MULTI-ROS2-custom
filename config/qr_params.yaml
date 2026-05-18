@@ -84,15 +84,17 @@ fast_calib:
     
 
     # Input
+    # NOTE: paths are relative to the directory where `ros2 launch` is invoked.
+    #       Run launch commands from the package root (FAST-CALIB-MULTI-ROS2/).
     lidar_topic: "/livox/lidar" # /ouster/points /livox/lidar
-    bag_path: "/home/alux-autopilot22/FAST-CALIB-MULTI-ROS2/calib_data/See3-MID360"
-    image_path: "/home/alux-autopilot22/FAST-CALIB-MULTI-ROS2/calib_data/See3-MID360/image.png"
+    bag_path: "calib_data/24CUG-MID360"
+    image_path: "calib_data/24CUG-MID360/image.png"
 
     # Output
-    output_path: "/home/alux-autopilot22/FAST-CALIB-MULTI-ROS2/output"
+    output_path: "output"
 
 # Multi-scene calibration parameters
 multi_fast_calib:
   ros__parameters:
-    output_path: "/home/alux-autopilot22/FAST-CALIB-MULTI-ROS2/output"
+    output_path: "output"
     min_scenes: 3  # Minimum number of scenes for multi-scene calibration (>=3)
