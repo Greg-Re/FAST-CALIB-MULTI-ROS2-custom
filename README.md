@@ -51,3 +51,23 @@ ros2 launch fast_calib multi_calib.launch.py
 
 Writes `<output_path>/multi_calib_result.txt` (R, t, RMSE, scenes used).
 Both nodes read the same `config/qr_params.yaml`; `min_scenes` lives there too.
+
+## Credits
+
+This repository is a derivative work. Please cite the original authors.
+
+- Original FAST-Calib (ROS 1): [hku-mars/FAST-Calib](https://github.com/hku-mars/FAST-Calib)
+  by Chunran Zheng &lt;zhengcr@connect.hku.hk&gt; (HKU-MARS Lab).
+- ROS 2 port this fork is based on: [ichangjian/FAST-Calib-ROS2](https://github.com/ichangjian/FAST-Calib-ROS2).
+- This fork ([Jun-Seong-Park/FAST-CALIB-MULTI-ROS2](https://github.com/Jun-Seong-Park/FAST-CALIB-MULTI-ROS2))
+  adds multi-board / multi-scene joint calibration (`multi_fast_calib`) on top.
+- Calibration-target design is from
+  [beltransen/velo2cam_calibration](https://github.com/beltransen/velo2cam_calibration).
+
+## License
+
+Licensed under the **GNU General Public License v2.0** — the same license as the
+upstream `hku-mars/FAST-Calib` and `ichangjian/FAST-Calib-ROS2`. See [`LICENSE`](./LICENSE) for the full text.
+
+Any redistribution or modification must remain under GPL-2.0 and must preserve
+the copyright / authorship notices in the source file headers.
