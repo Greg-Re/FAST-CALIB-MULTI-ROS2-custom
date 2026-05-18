@@ -63,29 +63,29 @@ private:
     {
         try
         {
-            // 创建bag读取器
+            // Create bag reader
             rosbag2_cpp::Reader reader;
             reader.open(bag_path);
 
-            // 设置序列化格式
+            // Set serialization format
             rclcpp::Serialization<sensor_msgs::msg::PointCloud2> serialization;
 
             while (reader.has_next())
             {
                 auto bag_message = reader.read_next();
 
-                // 检查是否是目标topic
+                // Check whether this is the target topic
                 if (bag_message->topic_name != topic_name)
                 {
                     continue;
                 }
 
-                // 反序列化消息
+                // Deserialize the message
                 auto ros_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
                 rclcpp::SerializedMessage extracted_serialized_msg(*bag_message->serialized_data);
                 serialization.deserialize_message(&extracted_serialized_msg, ros_msg.get());
 
-                // 转换为PCL点云
+                // Convert to PCL point cloud
                 pcl::PointCloud<pcl::PointXYZ>::Ptr frame(new pcl::PointCloud<pcl::PointXYZ>);
                 pcl::fromROSMsg(*ros_msg, *frame);
                 *cloud += *frame;

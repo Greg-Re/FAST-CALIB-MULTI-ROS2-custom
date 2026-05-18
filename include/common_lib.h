@@ -62,7 +62,7 @@ using namespace pcl;
 //                                       intensity)(std::uint16_t, ring,
 //                                                   ring)(float, range, range));
 
-// 参数结构体
+// Parameter struct
 struct Params
 {
   double x_min, x_max, y_min, y_max, z_min, z_max;
@@ -76,7 +76,7 @@ struct Params
   string output_path;
 };
 
-// 读取参数
+// Load parameters
 Params loadParameters(rclcpp::Node::SharedPtr node)
 {
   Params params;
@@ -157,7 +157,7 @@ double computeRMSE(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud1,
   return std::sqrt(mse);
 }
 
-// 将 LiDAR 点云转换到 QR 码坐标系
+// Transform LiDAR point cloud into the QR code coordinate frame
 void alignPointCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr &input_cloud,
                      pcl::PointCloud<pcl::PointXYZ>::Ptr &output_cloud, const Eigen::Matrix4f &transformation)
 {

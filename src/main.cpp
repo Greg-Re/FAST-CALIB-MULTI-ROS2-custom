@@ -16,10 +16,10 @@ int main(int argc, char **argv)
   rclcpp::init(argc, argv);
   auto node = std::make_shared<rclcpp::Node>("mono_qr_pattern");
 
-  // 读取参数
+  // Load parameters
   Params params = loadParameters(node);
 
-  // 初始化 QR 检测和 LiDAR 检测
+  // Initialize QR detection and LiDAR detection
   QRDetectPtr qrDetectPtr;
   qrDetectPtr.reset(new QRDetect(node, params));
 
@@ -29,35 +29,35 @@ int main(int argc, char **argv)
   DataPreprocessPtr dataPreprocessPtr;
   dataPreprocessPtr.reset(new DataPreprocess(params));
 
-  // 读取图像和点云
+  // Load image and point cloud
   cv::Mat img_input = dataPreprocessPtr->img_input_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input = dataPreprocessPtr->cloud_input_;
 
-  // 检测 QR 码
+  // Detect QR code
   PointCloud<PointXYZ>::Ptr qr_center_cloud(new PointCloud<PointXYZ>);
   qr_center_cloud->reserve(4);
   qrDetectPtr->detect_qr(img_input, qr_center_cloud);
 
-  // 检测 LiDAR 数据
+  // Detect LiDAR data
   PointCloud<PointXYZ>::Ptr lidar_center_cloud(new PointCloud<PointXYZ>);
   lidar_center_cloud->reserve(4);
   lidarDetectPtr->detect_lidar(cloud_input, lidar_center_cloud);
 
-  // 对 QR 和 LiDAR 检测到的圆心进行排序
+  // Sort the circle centers detected by QR and LiDAR
   PointCloud<PointXYZ>::Ptr qr_centers(new PointCloud<PointXYZ>);
   PointCloud<PointXYZ>::Ptr lidar_centers(new PointCloud<PointXYZ>);
   sortPatternCenters(qr_center_cloud, qr_centers, "camera");
   sortPatternCenters(lidar_center_cloud, lidar_centers, "lidar");
 
-  // 保存中间结果：排序后的 LiDAR 圆心和 QR 圆心 (for multi-scene calibration)
+  // Save intermediate results: sorted LiDAR circle centers and QR circle centers (for multi-scene calibration)
   saveTargetHoleCenters(lidar_centers, qr_centers, params);
 
-  // 计算外参
+  // Compute extrinsic parameters
   Eigen::Matrix4f transformation;
   pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ> svd;
   svd.estimateRigidTransformation(*lidar_centers, *qr_centers, transformation);
 
-  // 将 LiDAR 点云转换到 QR 码坐标系
+  // Transform LiDAR point cloud into the QR code coordinate frame
   pcl::PointCloud<pcl::PointXYZ>::Ptr aligned_lidar_centers(new pcl::PointCloud<pcl::PointXYZ>);
   aligned_lidar_centers->reserve(lidar_centers->size());
   alignPointCloud(lidar_centers, aligned_lidar_centers, transformation);
@@ -79,26 +79,26 @@ int main(int argc, char **argv)
   auto colored_cloud_pub = node->create_publisher<sensor_msgs::msg::PointCloud2>("colored_cloud", 1);
   auto aligned_lidar_centers_pub = node->create_publisher<sensor_msgs::msg::PointCloud2>("aligned_lidar_centers", 1);
 
-  // 主循环
+  // Main loop
   rclcpp::Rate rate(1);
   while (rclcpp::ok())
   {
     if (DEBUG)
     {
-      // 发布 QR 检测结果
+      // Publish QR detection result
       sensor_msgs::msg::PointCloud2 qr_centers_msg;
       pcl::toROSMsg(*qr_centers, qr_centers_msg);
       qr_centers_msg.header.stamp = node->now();
       qr_centers_msg.header.frame_id = "map";
       qrDetectPtr->qr_pub_->publish(qr_centers_msg);
 
-      // 发布 LiDAR 检测结果
+      // Publish LiDAR detection result
       sensor_msgs::msg::PointCloud2 lidar_centers_msg;
       pcl::toROSMsg(*lidar_centers, lidar_centers_msg);
       lidar_centers_msg.header = qr_centers_msg.header;
       lidarDetectPtr->center_pub_->publish(lidar_centers_msg);
 
-      // 发布中间结果
+      // Publish intermediate results
       sensor_msgs::msg::PointCloud2 filtered_cloud_msg;
       pcl::toROSMsg(*lidarDetectPtr->getFilteredCloud(), filtered_cloud_msg);
       filtered_cloud_msg.header = qr_centers_msg.header;
@@ -124,13 +124,13 @@ int main(int argc, char **argv)
       lidar_centers_z0_msg.header = qr_centers_msg.header;
       lidarDetectPtr->center_z0_pub_->publish(lidar_centers_z0_msg);
 
-      // 发布外参变换后的LiDAR点云
+      // Publish LiDAR point cloud after extrinsic transformation
       sensor_msgs::msg::PointCloud2 aligned_lidar_centers_msg;
       pcl::toROSMsg(*aligned_lidar_centers, aligned_lidar_centers_msg);
       aligned_lidar_centers_msg.header = qr_centers_msg.header;
       aligned_lidar_centers_pub->publish(aligned_lidar_centers_msg);
 
-      // 发布彩色点云
+      // Publish colored point cloud
       sensor_msgs::msg::PointCloud2 colored_cloud_msg;
       pcl::toROSMsg(*colored_cloud, colored_cloud_msg);
       colored_cloud_msg.header = qr_centers_msg.header;
