@@ -15,6 +15,7 @@ find_package(rosbag2_cpp REQUIRED)
 find_package(PCL 1.10 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 # Include directories
 include_directories(
@@ -40,6 +41,7 @@ ament_target_dependencies(fast_calib
   sensor_msgs
   pcl_conversions
   rosbag2_cpp
+  cv_bridge
 )
 
 target_link_libraries(fast_calib

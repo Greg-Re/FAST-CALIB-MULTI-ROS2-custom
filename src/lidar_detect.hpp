@@ -162,7 +162,7 @@ public:
         pcl::BoundaryEstimation<pcl::PointXYZ, pcl::Normal, pcl::Boundary> boundary_estimator;
         boundary_estimator.setInputCloud(aligned_cloud_);
         boundary_estimator.setInputNormals(normals);
-        boundary_estimator.setRadiusSearch(0.03);       // Search radius for boundary detection
+        boundary_estimator.setRadiusSearch(0.04);       // Search radius for boundary detection
         boundary_estimator.setAngleThreshold(M_PI / 4); // Angle threshold
         boundary_estimator.compute(boundaries);
 

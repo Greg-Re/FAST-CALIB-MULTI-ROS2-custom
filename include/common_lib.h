@@ -69,8 +69,9 @@ struct Params
   double fx, fy, cx, cy, k1, k2, p1, p2;
   double marker_size, delta_width_qr_center, delta_height_qr_center;
   double delta_width_circles, delta_height_circles, circle_radius;
+  double rotate_lidar;
   int min_detected_markers;
-  string image_path;
+  string camera_topic;
   string bag_path;
   string lidar_topic;
   string output_path;
@@ -95,7 +96,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->declare_parameter("delta_height_circles", 0.4);
   node->declare_parameter("min_detected_markers", 3);
   node->declare_parameter("circle_radius", 0.12);
-  node->declare_parameter("image_path", string("/home/chunran/calib_ws/src/fast_calib/data/image.png"));
+  node->declare_parameter("camera_topic", string("/camera/image_raw"));
   node->declare_parameter("bag_path", string("/home/chunran/calib_ws/src/fast_calib/data/input.bag"));
   node->declare_parameter("lidar_topic", string("/livox/lidar"));
   node->declare_parameter("output_path", string("/home/chunran/calib_ws/src/fast_calib/output"));
@@ -105,6 +106,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->declare_parameter("y_max", 2.0);
   node->declare_parameter("z_min", -0.5);
   node->declare_parameter("z_max", 2.0);
+  node->declare_parameter("rotate_lidar", 0.0);
 
   node->get_parameter_or("fx", params.fx, 1215.31801774424);
   node->get_parameter_or("fy", params.fy, 1214.72961288138);
@@ -121,7 +123,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->get_parameter_or("delta_height_circles", params.delta_height_circles, 0.4);
   node->get_parameter_or("min_detected_markers", params.min_detected_markers, 3);
   node->get_parameter_or("circle_radius", params.circle_radius, 0.12);
-  node->get_parameter_or("image_path", params.image_path, string("/home/chunran/calib_ws/src/fast_calib/data/image.png"));
+  node->get_parameter_or("camera_topic", params.camera_topic, string("/camera/image_raw"));
   node->get_parameter_or("bag_path", params.bag_path, string("/home/chunran/calib_ws/src/fast_calib/data/input.bag"));
   node->get_parameter_or("lidar_topic", params.lidar_topic, string("/livox/lidar"));
   node->get_parameter_or("output_path", params.output_path, string("/home/chunran/calib_ws/src/fast_calib/output"));
@@ -131,6 +133,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->get_parameter_or("y_max", params.y_max, 2.0);
   node->get_parameter_or("z_min", params.z_min, -0.5);
   node->get_parameter_or("z_max", params.z_max, 2.0);
+  node->get_parameter_or("rotate_lidar", params.rotate_lidar, 0.0);
   return params;
 }
 

@@ -1,100 +1,49 @@
 fast_calib:
   ros__parameters:    
-    # See3CAM_24CUG, 1280x720  exp: 10ms
-    # fx: 689.014802
-    # fy: 686.491458
-    # cx: 648.888053
-    # cy: 353.230277
-    # k1: -0.323225
-    # k2: 0.113872
-    # p1: -0.000056
-    # p2: 0.000112
-    
-    # See3CAM_24CUG, 1280x720  exp: 10ms
-    # fx: 689.088396
-    # fy: 685.963055
-    # cx: 651.682837
-    # cy: 355.539541
-    # k1: -0.331749
-    # k2: 0.123768
-    # p1: 0.000492
-    # p2: -0.000051
 
-    # See3CAM_24CUG, 640x360  exp: 10ms
-    fx: 344.901916
-    fy: 343.588634
-    cx: 324.878505
-    cy: 177.143198
-    k1: -0.334114
-    k2: 0.125136
-    p1: 0.000264
-    p2: 0.000110
+    # Basler aca 1920-155uc
+    fx: 1061.8347
+    fy: 1060.88239
+    cx: 962.77931
+    cy: 602.90198
 
-    # AR0234 1920x1080 original
-    # fx: 1237.23
-    # fy: 1243.01
-    # cx: 964.871
-    # cy: 608.516
-    # k1: -0.032135
-    # k2: -0.003845
-    # p1: -0.001649
-    # p2: 0.00239
-
-  #  # AR0234 1920x1080 new
-  #   fx: 1285.156174
-  #   fy: 1277.656483
-  #   cx: 950.997345
-  #   cy: 585.418991
-  #   k1: 0.013188
-  #   k2: -0.091481
-  #   p1: -0.000654
-  #   p2: 0.000811
-
-    # AR0234 1920x1080 new bad
-    # fx: 883.640625
-    # fy: 875.792212
-    # cx: 1041.839688
-    # cy: 583.965705
-    # k1: 0.020124
-    # k2: -0.051618
-    # p1: 0.000224
-    # p2: -0.000687
-    
+    k1: -0.139275
+    k2: 0.064437
+    p1: -0.000810
+    p2: 0.001691
     
     # Calibration target parameters
-    marker_size: 0.1 # ArUco marker size 4.7cm
-    delta_width_qr_center: 0.340 # Half the distance between the centers of two markers in the horizontal direction  # 0.340
-    delta_height_qr_center: 0.217 # Half the distance between the centers of two markers in the vertical direction (13.5cm / 2) # 0.217
-    delta_width_circles: 0.30 # Distance between the centers of two circles in the horizontal direction (17.6cm) # 0.15
-    delta_height_circles: 0.252 # Distance between the centers of two circles in the vertical direction (17.6cm) # 0.126
-    circle_radius: 0.07 # Radius of the circle 5cm
-
-    # delta_width_qr_center: 0.340 # Half the distance between the centers of two markers in the horizontal direction 30
-    # delta_height_qr_center: 0.217 # Half the distance between the centers of two markers in the vertical direction (13.5cm / 2)
-    # delta_width_circles: 0.150 # Distance between the centers of two circles in the horizontal direction (17.6cm)
-    # delta_height_circles: 0.126 # Distance between the centers of two circles in the vertical direction (17.6cm)
+    marker_size: 0.1 # ArUco marker size 
+    delta_width_qr_center: 0.23 # Half the distance between the centers of two markers in the horizontal direction  
+    delta_height_qr_center: 0.17 # Half the distance between the centers of two markers in the vertical direction 
+    delta_width_circles: 0.18 # Distance between the centers of two circles in the horizontal direction 
+    delta_height_circles: 0.22 # Distance between the centers of two circles in the vertical direction 
+    circle_radius: 0.06 # Radius of the circle 
     
     # Distance filter
     x_min: 0.5
     x_max: 2.0
     y_min: -0.5
     y_max: 0.5
-    z_min: 0.0
-    z_max: 0.9 
+    z_min: -0.5
+    z_max: 0.5
     
 
     # Input
     # NOTE: paths are relative to the directory where `ros2 launch` is invoked.
     #       Run launch commands from the package root (FAST-CALIB-MULTI-ROS2/).
-    lidar_topic: "/livox/lidar" # /ouster/points /livox/lidar
-    bag_path: "calib_data/24CUG-MID360"
-    image_path: "calib_data/24CUG-MID360/image.png"
+    lidar_topic: "/rslidar_points" # /ouster/points /livox/lidar
+    camera_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
+    bag_path: "/calibration-repo/data/multi_calib/half_right"
 
     # Output
-    output_path: "output"
+    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2/output"
+
+    # Lidar rotation
+    rotate_lidar: 180.0
 
 # Multi-scene calibration parameters
 multi_fast_calib:
   ros__parameters:
-    output_path: "output"
+    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2-custom/output"
     min_scenes: 3  # Minimum number of scenes for multi-scene calibration (>=3)
