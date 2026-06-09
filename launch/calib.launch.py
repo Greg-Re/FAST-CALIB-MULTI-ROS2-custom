@@ -16,8 +16,7 @@ def generate_launch_description():
 
     bag_path_arg = DeclareLaunchArgument(
         'bag_path',
-        default_value='',
-        description='Path to rosbag'
+        description='REQUIRED: Path to rosbag (must be set)'
     )
 
     # Launch configurations

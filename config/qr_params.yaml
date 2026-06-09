@@ -32,12 +32,11 @@ fast_calib:
     # Input
     # NOTE: paths are relative to the directory where `ros2 launch` is invoked.
     #       Run launch commands from the package root (FAST-CALIB-MULTI-ROS2/).
-    lidar_topic: "/rslidar_points" # /ouster/points /livox/lidar
+    lidar_topic: "/rslidar_points" 
     camera_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
-    bag_path: "/calibration-repo/data/multi_calib/half_right"
 
     # Output
-    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2/output"
+    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2-custom/output"
 
     # Lidar rotation
     rotate_lidar: 180.0
@@ -46,4 +45,4 @@ fast_calib:
 multi_fast_calib:
   ros__parameters:
     output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2-custom/output"
-    min_scenes: 3  # Minimum number of scenes for multi-scene calibration (>=3)
+    min_scenes: 3  # Minimum number of scenes for multi-scene calibration 
