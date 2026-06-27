@@ -27,6 +27,9 @@ public:
   cv::Mat imageCopy_;
   cv::Mat cameraMatrix_;
   cv::Mat distCoeffs_;
+  cv::Vec3d last_rvec_;
+  cv::Vec3d last_tvec_;
+  bool last_detection_valid_ = false;
 
   QRDetect(rclcpp::Node::SharedPtr node, Params &params)
   {
@@ -101,6 +104,7 @@ public:
 
   void detect_qr(cv::Mat &image, pcl::PointCloud<pcl::PointXYZ>::Ptr centers_cloud)
   {
+    last_detection_valid_ = false;
     image.copyTo(imageCopy_);
 
     // Create vector of markers corners. 4 markers * 4 corners
@@ -352,6 +356,10 @@ public:
       {
         centers_cloud->push_back(candidates_cloud->at(groups[best_candidate_idx][j]));
       }
+
+      last_rvec_ = rvec;
+      last_tvec_ = tvec;
+      last_detection_valid_ = true;
 
       if (DEBUG)
       { // Draw centers

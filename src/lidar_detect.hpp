@@ -253,6 +253,16 @@ public:
         }
     }
 
+    // Must be called before detect_lidar() when re-using the same instance across frames.
+    // aligned_cloud_, edge_cloud_, and center_z0_cloud_ use push_back and accumulate
+    // across calls; PCL filters replace filtered_cloud_ and plane_cloud_ automatically.
+    void resetIntermediateData()
+    {
+        aligned_cloud_->clear();
+        edge_cloud_->clear();
+        center_z0_cloud_->clear();
+    }
+
     // Accessors for intermediate point clouds
     pcl::PointCloud<pcl::PointXYZ>::Ptr getFilteredCloud() const { return filtered_cloud_; }
     pcl::PointCloud<pcl::PointXYZ>::Ptr getPlaneCloud() const { return plane_cloud_; }

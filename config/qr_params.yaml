@@ -36,13 +36,18 @@ fast_calib:
     camera_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
 
     # Output
-    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2-custom/output"
+    output_path: "/FAST-CALIB/output"
 
     # Lidar rotation
     rotate_lidar: 180.0
 
+    # Live calibration parameters (used by live_fast_calib node only)
+    target_scenes: 5           # number of diverse scenes to collect before joint calibration
+    min_translation_diff: 0.05 # minimum board translation change (m) to accept a new scene
+    min_rotation_diff: 5.0     # minimum board rotation change (deg) to accept a new scene
+
 # Multi-scene calibration parameters
 multi_fast_calib:
   ros__parameters:
-    output_path: "/calibration-repo/src/FAST-CALIB-MULTI-ROS2-custom/output"
+    output_path: "/FAST-CALIB/output"
     min_scenes: 3  # Minimum number of scenes for multi-scene calibration 
