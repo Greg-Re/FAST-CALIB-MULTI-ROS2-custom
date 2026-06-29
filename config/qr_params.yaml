@@ -32,8 +32,20 @@ fast_calib:
     # Input
     # NOTE: paths are relative to the directory where `ros2 launch` is invoked.
     #       Run launch commands from the package root (FAST-CALIB-MULTI-ROS2/).
-    lidar_topic: "/rslidar_points" 
+    lidar_topic: "/rslidar_points"
     camera_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
+
+    # Image transport for the camera subscription:
+    #   "compressed" -> subscribe to <camera_topic>/compressed (JPEG over the wire,
+    #                   decoded locally). Use this over a network link to avoid
+    #                   flooding it with the raw stream.
+    #   "raw"        -> subscribe to <camera_topic> directly (uncompressed).
+    #                   Use this locally, or when image quality matters more than
+    #                   bandwidth (e.g. Bayer images, where JPEG compression of the
+    #                   mosaic degrades detection accuracy).
+    # camera_topic above stays the BASE topic in both cases; do not append
+    # "/compressed" yourself.
+    camera_transport: "compressed"
 
     # Output
     output_path: "/fast-calib-workspace/output"

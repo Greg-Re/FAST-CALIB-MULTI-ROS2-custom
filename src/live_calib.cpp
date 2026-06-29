@@ -212,11 +212,15 @@ private:
       return;
     last_process_time_ = now;
 
-    // Convert image
+    // Convert image to MONO8. ArUco detection works on grayscale anyway, so we
+    // ask cv_bridge for the most direct path to gray. For a Bayer source this
+    // demosaics straight to luminance and avoids reconstructing colour (and the
+    // JPEG-on-Bayer colour/zipper artifacts that would hurt corner accuracy).
+    // detect_qr builds its own 3-channel image for the coloured preview overlay.
     cv::Mat img;
     try {
       img = cv_bridge::toCvCopy(img_msg,
-              sensor_msgs::image_encodings::BGR8)->image;
+              sensor_msgs::image_encodings::MONO8)->image;
     } catch (const cv_bridge::Exception& e) {
       RCLCPP_WARN(node_->get_logger(), "cv_bridge: %s", e.what());
       return;

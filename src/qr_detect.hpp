@@ -107,7 +107,14 @@ public:
   void detect_qr(cv::Mat &image, pcl::PointCloud<pcl::PointXYZ>::Ptr centers_cloud)
   {
     last_detection_valid_ = false;
-    image.copyTo(imageCopy_);
+    // imageCopy_ is the visualization image: coloured marker/axis/circle overlays
+    // are drawn on it and it is published as bgr8. Keep it 3-channel even when the
+    // detection input is single-channel (mono8), so the overlays stay coloured.
+    // ArUco itself runs on `image` directly and accepts mono8 or colour.
+    if (image.channels() == 1)
+      cv::cvtColor(image, imageCopy_, cv::COLOR_GRAY2BGR);
+    else
+      image.copyTo(imageCopy_);
 
     // Create vector of markers corners. 4 markers * 4 corners
     // Markers order:
