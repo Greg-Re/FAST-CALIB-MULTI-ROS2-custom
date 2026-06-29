@@ -36,18 +36,32 @@ fast_calib:
     camera_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
 
     # Output
-    output_path: "/FAST-CALIB/output"
+    output_path: "/fast-calib-workspace/output"
 
     # Lidar rotation
-    rotate_lidar: 180.0
+    rotate_lidar: 0.0
 
     # Live calibration parameters (used by live_fast_calib node only)
     target_scenes: 5           # number of diverse scenes to collect before joint calibration
     min_translation_diff: 0.05 # minimum board translation change (m) to accept a new scene
     min_rotation_diff: 5.0     # minimum board rotation change (deg) to accept a new scene
 
+    # Stability gate: a scene is only captured once the board has held still for
+    # `still_frames` consecutive frames. This prevents capturing while the board
+    # moves, which otherwise makes the camera and the rolling LiDAR sweep disagree
+    # about its pose (the main source of inaccurate live calibration).
+    require_still: true
+    still_translation_thresh: 0.006 # max board translation change (m) between frames to count as "still"
+    still_rotation_thresh: 0.6      # max board rotation change (deg) between frames to count as "still"
+    still_frames: 3                 # number of consecutive still frames required before capture
+
+    # Verbose per-frame diagnostics (marker/circle/cluster counts, skipped-frame
+    # warnings, debug PLY snapshots). When false, the node only logs on startup
+    # and when a scene is captured / calibration completes.
+    debug: false
+
 # Multi-scene calibration parameters
 multi_fast_calib:
   ros__parameters:
-    output_path: "/FAST-CALIB/output"
+    output_path: "/fast-calib-workspace/output"
     min_scenes: 3  # Minimum number of scenes for multi-scene calibration 

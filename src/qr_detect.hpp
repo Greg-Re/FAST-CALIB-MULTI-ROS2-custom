@@ -19,6 +19,7 @@ private:
   double marker_size_, delta_width_qr_center_, delta_height_qr_center_;
   double delta_width_circles_, delta_height_circles_;
   int min_detected_markers_;
+  bool debug_ = false;
   cv::Ptr<cv::aruco::Dictionary> dictionary_;
   rclcpp::Node::SharedPtr node_;
 
@@ -40,6 +41,7 @@ public:
     delta_width_circles_ = params.delta_width_circles;
     delta_height_circles_ = params.delta_height_circles;
     min_detected_markers_ = params.min_detected_markers;
+    debug_ = params.debug;
 
     // Initialize camera matrix
     cameraMatrix_ = (cv::Mat_<float>(3, 3) << params.fx, 0, params.cx,
@@ -78,7 +80,7 @@ public:
     }
     int n_permutations = upper_factorial / lower_factorial;
 
-    if (DEBUG)
+    if (debug_)
       cout << N << " centers found. Iterating over " << n_permutations
            << " possible sets of candidates" << endl;
 
@@ -331,9 +333,10 @@ public:
         if (best_candidate_score == 1 && groups_scores[i] == 1)
         {
           // Exit 4: Several candidates fit target's geometry
-          RCLCPP_ERROR(node_->get_logger(),
-                       "[Mono] More than one set of candidates fit target's geometry. "
-                       "Please, make sure your parameters are well set. Exiting callback");
+          if (debug_)
+            RCLCPP_ERROR(node_->get_logger(),
+                         "[Mono] More than one set of candidates fit target's geometry. "
+                         "Please, make sure your parameters are well set. Exiting callback");
           return;
         }
         if (groups_scores[i] > best_candidate_score)
@@ -346,9 +349,10 @@ public:
       if (best_candidate_idx == -1)
       {
         // Exit: No candidates fit target's geometry
-        RCLCPP_WARN(node_->get_logger(),
-                    "[Mono] Unable to find a candidate set that matches target's "
-                    "geometry");
+        if (debug_)
+          RCLCPP_WARN(node_->get_logger(),
+                      "[Mono] Unable to find a candidate set that matches target's "
+                      "geometry");
         return;
       }
 
@@ -377,8 +381,9 @@ public:
     else
     {
       // Markers found != TARGET_NUM_CIRCLES
-      RCLCPP_WARN(node_->get_logger(), "%lu marker(s) found, %d expected. Skipping frame...", ids.size(),
-                  TARGET_NUM_CIRCLES);
+      if (debug_)
+        RCLCPP_WARN(node_->get_logger(), "%lu marker(s) found, %d expected. Skipping frame...", ids.size(),
+                    TARGET_NUM_CIRCLES);
     }
   }
 };

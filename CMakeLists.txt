@@ -17,6 +17,7 @@ find_package(PCL 1.10 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(image_transport REQUIRED)
 
 # Include directories
 include_directories(
@@ -70,6 +71,7 @@ ament_target_dependencies(live_fast_calib
   pcl_conversions
   cv_bridge
   message_filters
+  image_transport
 )
 
 target_link_libraries(live_fast_calib

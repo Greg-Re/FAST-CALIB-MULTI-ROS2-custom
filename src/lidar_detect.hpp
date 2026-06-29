@@ -22,6 +22,7 @@ which is included as part of this source code package.
 
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/ply_io.h>
+#include <pcl/console/print.h>
 #include "common_lib.h"
 
 class LidarDetect
@@ -31,6 +32,14 @@ private:
     double circle_radius_;
     rclcpp::Node::SharedPtr node_;
     std::string output_path_;
+
+    // When false, the per-frame debug PLY snapshots are skipped. The live node
+    // disables them: writing 4 ASCII PLY files on every synchronized frame
+    // blocks the callback for hundreds of ms and tanks the effective topic rate.
+    bool write_debug_clouds_ = true;
+
+    // When false, suppress the per-frame diagnostic console output.
+    bool debug_ = false;
 
     // Point clouds for storing intermediate results
     pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud_;
@@ -63,6 +72,13 @@ public:
         z_max_ = params.z_max;
         circle_radius_ = params.circle_radius;
         output_path_ = params.output_path + "/";
+        debug_ = params.debug;
+
+        // Silence PCL's own console chatter (RANSAC / segmentation / PLY writer
+        // messages) unless debugging. These print directly from PCL, bypassing
+        // the ROS logger, so they have to be muted at the PCL console level.
+        pcl::console::setVerbosityLevel(
+            debug_ ? pcl::console::L_INFO : pcl::console::L_ALWAYS);
 
         filtered_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("filtered_cloud", 1);
         plane_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("plane_cloud", 1);
@@ -71,6 +87,9 @@ public:
         center_z0_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("center_z0_cloud", 10);
         center_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("center_cloud", 10);
     }
+
+    // Enable/disable the per-frame debug PLY snapshots (default enabled).
+    void setWriteDebugClouds(bool enabled) { write_debug_clouds_ = enabled; }
 
     void detect_lidar(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr center_cloud)
     {
@@ -95,14 +114,25 @@ public:
         pass_z.setFilterLimits(z_min_, z_max_); // Set Z-axis range
         pass_z.filter(*filtered_cloud_);
 
-        RCLCPP_INFO(node_->get_logger(), "Filtered cloud size: %ld", filtered_cloud_->size());
+        if (debug_) RCLCPP_INFO(node_->get_logger(), "Filtered cloud size: %ld", filtered_cloud_->size());
 
         pcl::VoxelGrid<pcl::PointXYZ> voxel_filter;
         voxel_filter.setInputCloud(filtered_cloud_);
         voxel_filter.setLeafSize(0.005f, 0.005f, 0.005f);
         voxel_filter.filter(*filtered_cloud_);
-        RCLCPP_INFO(node_->get_logger(), "Filtered cloud size: %ld", filtered_cloud_->size());
-        save2PLY(filtered_cloud_, output_path_ + "filtered_cloud.ply");
+        if (debug_) RCLCPP_INFO(node_->get_logger(), "Filtered cloud size: %ld", filtered_cloud_->size());
+
+        // Guard: an empty filtered cloud (e.g. target out of view) makes the
+        // downstream RANSAC plane fit fail and leaves plane_coefficients empty.
+        // Bail out so the caller skips this frame instead of crashing.
+        if (filtered_cloud_->empty())
+        {
+            if (debug_) RCLCPP_WARN(node_->get_logger(),
+                "[LidarDetect] Filtered cloud is empty. Skipping frame.");
+            return;
+        }
+
+        if (write_debug_clouds_) save2PLY(filtered_cloud_, output_path_ + "filtered_cloud.ply");
         // 2. Plane segmentation
         plane_cloud_->reserve(filtered_cloud_->size());
 
@@ -115,12 +145,22 @@ public:
         plane_segmentation.setInputCloud(filtered_cloud_);
         plane_segmentation.segment(*plane_inliers, *plane_coefficients);
 
+        // Guard: a failed plane fit leaves plane_coefficients->values empty.
+        // The code below indexes values[0..2] unconditionally, so an empty
+        // result here is the SIGSEGV source. Skip the frame instead.
+        if (plane_inliers->indices.empty() || plane_coefficients->values.size() < 4)
+        {
+            if (debug_) RCLCPP_WARN(node_->get_logger(),
+                "[LidarDetect] Plane segmentation failed (no inliers). Skipping frame.");
+            return;
+        }
+
         pcl::ExtractIndices<pcl::PointXYZ> extract;
         extract.setInputCloud(filtered_cloud_);
         extract.setIndices(plane_inliers);
         extract.filter(*plane_cloud_);
-        RCLCPP_INFO(node_->get_logger(), "Plane cloud size: %ld", plane_cloud_->size());
-        save2PLY(plane_cloud_, output_path_ + "plane_cloud.ply");
+        if (debug_) RCLCPP_INFO(node_->get_logger(), "Plane cloud size: %ld", plane_cloud_->size());
+        if (write_debug_clouds_) save2PLY(plane_cloud_, output_path_ + "plane_cloud.ply");
         // 3. Align the plane point cloud
         aligned_cloud_->reserve(plane_cloud_->size());
 
@@ -147,8 +187,14 @@ public:
             average_z += aligned_point.z();
             cnt++;
         }
+        if (cnt == 0)
+        {
+            if (debug_) RCLCPP_WARN(node_->get_logger(),
+                "[LidarDetect] Plane cloud is empty. Skipping frame.");
+            return;
+        }
         average_z /= cnt;
-        save2PLY(aligned_cloud_, output_path_ + "aligned_cloud.ply");
+        if (write_debug_clouds_) save2PLY(aligned_cloud_, output_path_ + "aligned_cloud.ply");
         // 4. Extract edge points
         edge_cloud_->reserve(aligned_cloud_->size());
 
@@ -173,8 +219,17 @@ public:
                 edge_cloud_->push_back(aligned_cloud_->points[i]);
             }
         }
-        RCLCPP_INFO(node_->get_logger(), "Extracted %ld edge points.", edge_cloud_->size());
-        save2PLY(edge_cloud_, output_path_ + "edge_cloud.ply");
+        if (debug_) RCLCPP_INFO(node_->get_logger(), "Extracted %ld edge points.", edge_cloud_->size());
+        if (write_debug_clouds_) save2PLY(edge_cloud_, output_path_ + "edge_cloud.ply");
+
+        // Guard: clustering / KdTree on an empty edge cloud is undefined.
+        if (edge_cloud_->empty())
+        {
+            if (debug_) RCLCPP_WARN(node_->get_logger(),
+                "[LidarDetect] No edge points found. Skipping frame.");
+            return;
+        }
+
         // 5. Cluster the edge points
         pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
         tree->setInputCloud(edge_cloud_);
@@ -188,7 +243,7 @@ public:
         ec.setInputCloud(edge_cloud_);
         ec.extract(cluster_indices);
 
-        RCLCPP_INFO(node_->get_logger(), "Number of edge clusters: %ld", cluster_indices.size());
+        if (debug_) RCLCPP_INFO(node_->get_logger(), "Number of edge clusters: %ld", cluster_indices.size());
 
         // 6. Fit a circle to each cluster
         center_z0_cloud_->reserve(4);
@@ -229,7 +284,7 @@ public:
                 error /= inliers->indices.size();
 
                 // If fitting error is small enough, treat it as a circular hole
-                std::cout << "inliers->indices.size() " << inliers->indices.size() << " " << error << std::endl;
+                if (debug_) std::cout << "inliers->indices.size() " << inliers->indices.size() << " " << error << std::endl;
                 if (error < 0.02)
                 {
                     // Add the recovered circle center to the point cloud

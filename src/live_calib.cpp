@@ -17,6 +17,7 @@ Usage:
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <image_transport/subscriber_filter.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/common/transforms.h>
@@ -90,6 +91,18 @@ public:
     node_->declare_parameter("target_scenes", 5);
     node_->declare_parameter("min_translation_diff", 0.05);
     node_->declare_parameter("min_rotation_diff", 5.0);
+    // Image transport: "compressed" pulls only the JPEG stream over the network
+    // instead of the raw (~20x larger) frames. Set to "raw" for a local setup.
+    node_->declare_parameter("camera_transport", std::string("compressed"));
+    // Stability gate: a scene is only captured once the board has held still for
+    // a few consecutive frames. A moving board makes the camera frame and the
+    // (rolling) LiDAR sweep disagree about its pose, which is the dominant source
+    // of live calibration error. Thresholds are the max board motion between two
+    // consecutive processed frames that still counts as "still".
+    node_->declare_parameter("require_still", true);
+    node_->declare_parameter("still_translation_thresh", 0.006);  // m
+    node_->declare_parameter("still_rotation_thresh", 0.6);       // deg
+    node_->declare_parameter("still_frames", 3);                  // consecutive still frames
 
     params_ = loadParameters(node_);
 
@@ -99,18 +112,53 @@ public:
     node_->get_parameter_or("min_rotation_diff",    rot_deg,           5.0);
     min_rot_diff_rad_ = rot_deg * M_PI / 180.0;
 
+    node_->get_parameter_or("require_still",            require_still_,      true);
+    node_->get_parameter_or("still_translation_thresh", still_trans_thresh_, 0.006);
+    double still_rot_deg = 0.6;
+    node_->get_parameter_or("still_rotation_thresh",    still_rot_deg,       0.6);
+    still_rot_thresh_rad_ = still_rot_deg * M_PI / 180.0;
+    node_->get_parameter_or("still_frames",             still_frames_,       3);
+
     qr_detect_    = std::make_shared<QRDetect>(node_, params_);
     lidar_detect_ = std::make_shared<LidarDetect>(node_, params_);
+
+    // Live mode runs the detection pipeline on every synchronized frame. The
+    // per-frame debug PLY snapshots are pure disk I/O on the callback thread and
+    // would block it for hundreds of ms each frame, so only write them when debug
+    // is explicitly enabled. The final result clouds are still saved by
+    // triggerCalibration() regardless.
+    lidar_detect_->setWriteDebugClouds(params_.debug);
 
     colored_cloud_pub_ =
       node_->create_publisher<sensor_msgs::msg::PointCloud2>("colored_cloud", 1);
     detection_img_pub_ =
       node_->create_publisher<sensor_msgs::msg::Image>("detection_image", 1);
 
-    img_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
-                  node_, params_.camera_topic);
+    // Sensor streams arrive over DDS from a remote machine (e.g. a Jetson).
+    //
+    // Camera: subscribe via image_transport with the "compressed" transport.
+    // Subscribing to raw image_raw forces the publisher to push the full
+    // ~1.1 Gbit/s uncompressed stream onto the network, which saturates the link
+    // and collapses the rate of every topic (including the compressed one). The
+    // compressed transport pulls only the ~50 Mbit/s JPEG stream and decodes it
+    // locally, so the wire never carries the raw frames. RELIABLE with a small
+    // queue: a JPEG frame still spans a few RTPS fragments, so reliability avoids
+    // dropped frames, and the callback is cheap enough not to back-pressure.
+    std::string transport;
+    node_->get_parameter_or("camera_transport", transport, std::string("compressed"));
+    rmw_qos_profile_t image_qos = rmw_qos_profile_default;  // RELIABLE, keep_last
+    image_qos.depth = 2;                                    // small queue: no stale backlog
+    img_sub_ = std::make_shared<image_transport::SubscriberFilter>();
+    img_sub_->subscribe(node_.get(), params_.camera_topic, transport, image_qos);
+
+    // LiDAR: use SENSOR_DATA (BEST_EFFORT). Point clouds tolerate dropped frames
+    // and best-effort is the standard sensor profile; it also stays compatible
+    // whether the driver publishes reliable or best-effort.
     cloud_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>>(
-                  node_, params_.lidar_topic);
+                  node_, params_.lidar_topic, rmw_qos_profile_sensor_data);
+
+    RCLCPP_INFO(node_->get_logger(),
+      "[LiveCalib] Camera image_transport: '%s'.", transport.c_str());
 
     sync_ = std::make_shared<Sync>(SyncPolicy(20), *img_sub_, *cloud_sub_);
     sync_->registerCallback(
@@ -153,6 +201,17 @@ private:
       return;
     }
 
+    // Throttle the heavy QR + LiDAR detection. Calibration only needs occasional
+    // frames (a human repositioning the board), but running the full pipeline on
+    // every synchronized frame keeps the executor thread busy and back-pressures
+    // the reliable image subscription. Returning early on most frames keeps the
+    // callback cheap so the sensor topics stay at full rate.
+    rclcpp::Time now = node_->now();
+    if (last_process_time_.nanoseconds() != 0 &&
+        (now - last_process_time_).seconds() < min_process_interval_s_)
+      return;
+    last_process_time_ = now;
+
     // Convert image
     cv::Mat img;
     try {
@@ -177,13 +236,26 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr qr_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     qr_detect_->detect_qr(img, qr_cloud);
 
-    if (!qr_detect_->last_detection_valid_ || qr_cloud->size() != 4)
-      return;  // detect_qr already emits a WARN; avoid flooding the log
-
-    // Publish annotated image so operator can see detection quality
+    // Publish the (locally decoded) annotated image every processed frame so the
+    // operator always has a live preview in RViz — even when no target is found.
+    // detect_qr always copies the input into imageCopy_ and overlays detections
+    // on top, so this carries both the camera view and the detection quality.
+    // This is a LOCAL publication; RViz should view this, not the remote raw
+    // topic, otherwise it pulls the heavy raw stream over the network again.
     auto det_msg = cv_bridge::CvImage(
         img_msg->header, "bgr8", qr_detect_->imageCopy_).toImageMsg();
     detection_img_pub_->publish(*det_msg);
+
+    if (!qr_detect_->last_detection_valid_ || qr_cloud->size() != 4)
+      return;  // detect_qr already emits a WARN; avoid flooding the log
+
+    // Stability gate: only proceed once the board has been (nearly) motionless
+    // for several consecutive frames. The board pose comes from the camera pose
+    // estimate (tvec/rvec); comparing it frame-to-frame tells us whether it is
+    // moving. Capturing while it moves makes the camera and the rolling LiDAR
+    // sweep disagree about the pose — the main live-calibration error source.
+    if (require_still_ && !isStill(qr_detect_->last_tvec_, qr_detect_->last_rvec_))
+      return;
 
     // LiDAR detection — clear accumulating clouds before reuse
     lidar_detect_->resetIntermediateData();
@@ -191,17 +263,19 @@ private:
     lidar_detect_->detect_lidar(cloud, lidar_cloud);
 
     if (lidar_cloud->size() != 4) {
-      RCLCPP_WARN(node_->get_logger(),
-        "[LiveCalib] LiDAR: found %zu circles (need 4). Skipping frame.",
-        lidar_cloud->size());
+      if (params_.debug)
+        RCLCPP_WARN(node_->get_logger(),
+          "[LiveCalib] LiDAR: found %zu circles (need 4). Skipping frame.",
+          lidar_cloud->size());
       return;
     }
 
     // Scene diversity check
     if (!isDiverse(qr_detect_->last_tvec_, qr_detect_->last_rvec_)) {
-      RCLCPP_INFO(node_->get_logger(),
-        "[LiveCalib] Scene too similar to an existing one. "
-        "Move the calibration target to a new position.");
+      if (params_.debug)
+        RCLCPP_INFO(node_->get_logger(),
+          "[LiveCalib] Scene too similar to an existing one. "
+          "Move the calibration target to a new position.");
       return;
     }
 
@@ -225,12 +299,63 @@ private:
     // Append to circle_center_record.txt (keeps compatibility with multi_calib)
     saveTargetHoleCenters(lidar_sorted, qr_sorted, params_);
 
-    RCLCPP_INFO(node_->get_logger(),
-      "[LiveCalib] Scene %zu / %d captured.",
-      scenes_.size(), target_scenes_);
+    // Running joint RMSE over all scenes captured so far, for live feedback.
+    // With a single scene the fit is near-degenerate, so only report it once
+    // there are at least two scenes to disagree.
+    if (scenes_.size() >= 2) {
+      double rms = currentRMSE();
+      RCLCPP_INFO(node_->get_logger(),
+        "[LiveCalib] Scene %zu / %d captured.  Running RMSE: %.4f m",
+        scenes_.size(), target_scenes_, rms);
+    } else {
+      RCLCPP_INFO(node_->get_logger(),
+        "[LiveCalib] Scene %zu / %d captured.",
+        scenes_.size(), target_scenes_);
+    }
 
     if (static_cast<int>(scenes_.size()) >= target_scenes_)
       triggerCalibration(cloud, img, img_msg->header);
+  }
+
+  // Joint RMSE over all scenes captured so far. Returns -1 if not solvable.
+  double currentRMSE() const
+  {
+    std::vector<Eigen::Vector3d> L, C;
+    for (const auto& sc : scenes_)
+      for (int i = 0; i < 4; ++i) {
+        L.push_back(sc.lidar_pts[i]);
+        C.push_back(sc.qr_pts[i]);
+      }
+    auto res = solveRigid(L, C);
+    return res.ok ? res.rms : -1.0;
+  }
+
+  // ── Board stability check ─────────────────────────────────────────────────
+
+  // Returns true once the board pose has stayed within the motion thresholds for
+  // `still_frames_` consecutive processed frames. Updates the rolling state.
+  bool isStill(const cv::Vec3d& tvec, const cv::Vec3d& rvec)
+  {
+    bool still_now = true;
+    if (have_prev_pose_) {
+      double dt = cv::norm(tvec - prev_tvec_);
+      double dr = cv::norm(rvec - prev_rvec_);
+      still_now = (dt < still_trans_thresh_ && dr < still_rot_thresh_rad_);
+    } else {
+      still_now = false;  // need at least one previous frame to compare
+    }
+    prev_tvec_ = tvec;
+    prev_rvec_ = rvec;
+    have_prev_pose_ = true;
+
+    if (still_now) {
+      ++stable_count_;
+    } else {
+      if (stable_count_ >= still_frames_ && params_.debug)
+        RCLCPP_INFO(node_->get_logger(), "[LiveCalib] Board moving — hold still to capture.");
+      stable_count_ = 0;
+    }
+    return stable_count_ >= still_frames_;
   }
 
   // ── Scene diversity check ─────────────────────────────────────────────────
@@ -275,13 +400,13 @@ private:
     T.block<3, 3>(0, 0) = res.R.cast<float>();
     T.block<3, 1>(0, 3) = res.t.cast<float>();
 
-    std::cout << BOLDYELLOW << "\n[LiveCalib] Joint calibration complete." << RESET
-              << std::endl;
-    std::cout << BOLDYELLOW << "[LiveCalib] RMSE: " << BOLDRED
-              << std::fixed << std::setprecision(4) << res.rms << " m" << RESET
-              << std::endl;
-    std::cout << BOLDYELLOW << "[LiveCalib] T_cam_lidar:\n" << BOLDCYAN
-              << std::fixed << std::setprecision(6) << T << RESET << std::endl;
+    // Route the result through the ROS logger (not std::cout) so it stays in
+    // order with the other [LiveCalib] messages under `ros2 launch`.
+    std::ostringstream mat;
+    mat << std::fixed << std::setprecision(6) << T;
+    RCLCPP_INFO(node_->get_logger(),
+      "[LiveCalib] Joint calibration complete. RMSE: %.4f m\nT_cam_lidar:\n%s",
+      res.rms, mat.str().c_str());
 
     saveMultiResult(res, static_cast<int>(scenes_.size()));
 
@@ -334,8 +459,7 @@ private:
     f << "RMSE: "        << res.rms   << " m\n";
     f << "Scenes_used: " << n_scenes  << "\n";
     f.close();
-    std::cout << BOLDYELLOW << "[LiveCalib] Results saved to "
-              << BOLDWHITE  << path << RESET << std::endl;
+    RCLCPP_INFO(node_->get_logger(), "[LiveCalib] Results saved to %s", path.c_str());
   }
 
   void publishStoredCloud(const std_msgs::msg::Header& hdr)
@@ -355,17 +479,31 @@ private:
   double  min_trans_diff_   = 0.05;
   double  min_rot_diff_rad_ = 5.0 * M_PI / 180.0;
 
+  // Stability gate state
+  bool      require_still_         = true;
+  double    still_trans_thresh_    = 0.006;
+  double    still_rot_thresh_rad_  = 0.6 * M_PI / 180.0;
+  int       still_frames_          = 3;
+  bool      have_prev_pose_        = false;
+  int       stable_count_          = 0;
+  cv::Vec3d prev_tvec_;
+  cv::Vec3d prev_rvec_;
+
   QRDetectPtr    qr_detect_;
   LidarDetectPtr lidar_detect_;
 
   std::vector<Scene> scenes_;
   bool calibrated_ = false;
+
+  // Detection throttle: process at most ~3 Hz regardless of incoming rate.
+  rclcpp::Time last_process_time_{0, 0, RCL_ROS_TIME};
+  double       min_process_interval_s_ = 0.33;
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_cloud_;
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr colored_cloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr       detection_img_pub_;
 
-  std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>>
+  std::shared_ptr<image_transport::SubscriberFilter>
       img_sub_;
   std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>>
       cloud_sub_;

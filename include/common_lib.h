@@ -75,6 +75,7 @@ struct Params
   string bag_path;
   string lidar_topic;
   string output_path;
+  bool debug;  // when false, suppress per-frame diagnostic console output
 };
 
 // Load parameters
@@ -107,6 +108,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->declare_parameter("z_min", -0.5);
   node->declare_parameter("z_max", 2.0);
   node->declare_parameter("rotate_lidar", 0.0);
+  node->declare_parameter("debug", false);
 
   node->get_parameter_or("fx", params.fx, 1215.31801774424);
   node->get_parameter_or("fy", params.fy, 1214.72961288138);
@@ -134,6 +136,7 @@ Params loadParameters(rclcpp::Node::SharedPtr node)
   node->get_parameter_or("z_min", params.z_min, -0.5);
   node->get_parameter_or("z_max", params.z_max, 2.0);
   node->get_parameter_or("rotate_lidar", params.rotate_lidar, 0.0);
+  node->get_parameter_or("debug", params.debug, false);
   return params;
 }
 
